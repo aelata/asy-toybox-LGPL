@@ -1,0 +1,148 @@
+*** ../../src/asymptote-3.05/base/flowchart.asy	Fri Jul  4 03:37:30 2025
+--- flowchart_mod.asy	Mon Dec  1 16:47:17 2025
+***************
+*** 91,96 ****
+--- 91,99 ----
+  
+    // Store optional arrow.
+    arrowbar arrow=None;
++ 
++   // Store relative connector position.
++   real connpos=0.5;
+  };
+  
+  // Construct a rectangular block with header and body objects.
+***************
+*** 414,423 ****
+               -0.5*block.size+min(p),0.5*block.size+max(p));
+  }
+  
+  typedef block blockconnector(block, block);
+  
+  blockconnector blockconnector(picture pic, transform t, pen p=currentpen,
+!                               margin margin=PenMargin)
+  {
+    return new block(block b1, block b2) {
+      if(b1.dirs.length == 0) {
+--- 417,437 ----
+               -0.5*block.size+min(p),0.5*block.size+max(p));
+  }
+  
++ void draw(picture pic=currentpicture, pen p=currentpen ... block[] blocks)
++ {
++   for (block b: blocks)
++     draw(pic, b, p);
++ }
++ 
++ pair interp(pair a, pair b, pair c, real t) {
++   t *= 2;
++   return (t <= 1) ? interp(a, b, t) : interp(b, c, t - 1);
++ }
++ 
+  typedef block blockconnector(block, block);
+  
+  blockconnector blockconnector(picture pic, transform t, pen p=currentpen,
+!                               margin margin=PenMargin, bool term=true)
+  {
+    return new block(block b1, block b2) {
+      if(b1.dirs.length == 0) {
+***************
+*** 447,456 ****
+      pair[] dirs=copy(b1.dirs); // deep copy
+      pair current,prev;
+      pair dir=dirs[0];
+!     if(dir == up) prev=b1.top(t);
+!     if(dir == down) prev=b1.bottom(t);
+!     if(dir == left) prev=b1.left(t);
+!     if(dir == right) prev=b1.right(t);
+      path line=prev;
+      arrowbar arrow=b1.arrow;
+  
+--- 461,474 ----
+      pair[] dirs=copy(b1.dirs); // deep copy
+      pair current,prev;
+      pair dir=dirs[0];
+!     if(dir == up) prev = interp(
+!       b1.topleft(t), b1.top(t), b1.topright(t), b1.connpos);
+!     if(dir == down) prev = interp(
+!       b1.bottomleft(t), b1.bottom(t), b1.bottomright(t), b1.connpos);
+!     if(dir == left) prev = interp(
+!       b1.bottomleft(t), b1.left(t), b1.topleft(t), b1.connpos);
+!     if(dir == right) prev = interp(
+!       b1.bottomright(t), b1.right(t), b1.topright(t), b1.connpos);
+      path line=prev;
+      arrowbar arrow=b1.arrow;
+  
+***************
+*** 468,487 ****
+      }
+      dir=dirs[dirs.length-1];
+      current=0;
+!     if(dir == up) current=b2.bottom(t);
+!     if(dir == down) current=b2.top(t);
+!     if(dir == left) current=b2.right(t);
+!     if(dir == right) current=b2.left(t);
+      if(abs(dirs[i-1].y) < sqrtEpsilon &&
+         abs(prev.x-current.x) > sqrtEpsilon) {
+        prev=(current.x,prev.y);
+        line=line--prev; // horizontal
+      } else if(abs(dirs[i-1].x) < sqrtEpsilon &&
+                abs(prev.y-current.y) > sqrtEpsilon) {
+        prev=(prev.x,current.y);
+        line=line--prev;
+      }
+!     if(current != prev)
+        line=line--current;
+  
+      draw(pic,b1.label,line,p,arrow,margin);
+--- 486,517 ----
+      }
+      dir=dirs[dirs.length-1];
+      current=0;
+!     if(dir == up) current = interp(
+!       b2.bottomleft(t), b2.bottom(t), b2.bottomright(t), b2.connpos);
+!     if(dir == down) current = interp(
+!       b2.topleft(t), b2.top(t), b2.topright(t), b2.connpos);
+!     if(dir == left) current = interp(
+!       b2.bottomright(t), b2.right(t), b2.topright(t), b2.connpos);
+!     if(dir == right) current = interp(
+!       b2.bottomleft(t), b2.left(t), b2.topleft(t), b2.connpos);
+      if(abs(dirs[i-1].y) < sqrtEpsilon &&
+         abs(prev.x-current.x) > sqrtEpsilon) {
+        prev=(current.x,prev.y);
+        line=line--prev; // horizontal
++       if (!term) {
++         real dy = b2.top(t).y - b2.bottom(t).y;
++         b2.connpos = (dy != 0) ? (prev.y - b2.bottom(t).y) / dy : 0.5;
++       }
+      } else if(abs(dirs[i-1].x) < sqrtEpsilon &&
+                abs(prev.y-current.y) > sqrtEpsilon) {
+        prev=(prev.x,current.y);
+        line=line--prev;
++       if (!term) {
++         real dx = b2.right(t).x - b2.left(t).x;
++         b2.connpos = (dx != 0) ? (prev.x - b2.left(t).x) / dx : 0.5;
++       }
+      }
+!     if(term && current != prev) // termination can be skipped
+        line=line--current;
+  
+      draw(pic,b1.label,line,p,arrow,margin);
+***************
+*** 523,526 ****
+--- 553,567 ----
+  {
+    b.arrow=arrowbar;
+    return b;
++ }
++ 
++ // Set a relative connector position of the block
++ block operator ..(block b, real connpos)
++ {
++   b.connpos=connpos;
++   return b;
++ }
++ real operator spec(real connpos, int side)
++ {
++   return connpos;
+  }
